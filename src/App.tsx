@@ -1,91 +1,243 @@
- /* eslint-disable */
+import * as React from 'react'
+import { PlusCircleIcon } from '@heroicons/react/24/outline'
+import { ToastProvider, ToastViewport, Toast } from './toast'
+import * as ToggleGroup from '@radix-ui/react-toggle-group'
+import type { Artwork } from './artwork'
 
-import React, { useEffect, useState } from 'react';
-import './App.css';
-
-async function getArtwork(id: number) {
-  return fetch('https://api.artic.edu/api/v1/artworks/' + id);
+type Art = {
+  id: number
 }
 
-function getImageUrl(id: string) {
-  return 'https://www.artic.edu/iiif/2/' + id + '/full/843,/0/default.jpg'
-}
-
-function ArtItem(props: any) {
-  const [voted, setVoted] = useState<boolean>(false)
-  const [artwork, setArtwork] = useState<any>(null)
-
-  const submit = () => {
-    console.log("Submitting!")
-    /* 
-    Please have the submit button POST to https://v0867.mocklab.io/rating with the following payload:
-
-      {
-        "id": {#id},
-        "rating": {#rating}
-      }
-
-    Where id is the artwork's id, and rating is the selected rating.
-
-    The endpoint should return the following:
-
-    {
-      "message": "Success"
-    }
-  */
-    return () => {};
-  };
-
-  if (props.disabled)
-  {
-    return <></>;
-  }
-  
-  useEffect( () => {
-    getArtwork(props.id).then(r => r.json()).then(json => setArtwork(json))
-  }, []);
+export const App = () => {
+  const [arts, setArts] = React.useState<Art[]>([
+    { id: 27992 },
+    { id: 27998 },
+    { id: 27999 },
+    { id: 27997 },
+    { id: 27993 },
+  ])
+  const [fieldError, setFieldError] = React.useState('')
 
   return (
-    <div className="item">
-        <h2>{artwork && artwork.data.title}</h2>
-        <h3>{artwork && artwork.data.artist_title}</h3>
-        <img style={ { width: 100 } } src={artwork != null ? getImageUrl(artwork.data.image_id) : ""} />
-        <p>Rating: {artwork && artwork.rating}</p>
-        <button onClick={() => { artwork.rating = 1; setVoted(true); }}>1</button>
-        <button onClick={() => { artwork.rating = 2; setVoted(true); }}>2</button>
-        <button onClick={() => { artwork.rating = 3; setVoted(true); }}>3</button>
-        <button onClick={() => { artwork.rating = 4; setVoted(true); }}>4</button>
-        <button onClick={() => { artwork.rating = 5; setVoted(true); }}>5</button>
-        <button onClick={submit()}>Submit</button>
-    </div>
+    <ToastProvider duration={10000}>
+      <main className="mx-auto max-w-7xl px-4 py-8">
+        <h1 className="text-center text-2xl">Art Rater</h1>
+        <ul className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2">
+          {arts.map((art) => (
+            <ArtItem
+              key={art.id}
+              id={art.id}
+              onRemove={(id) => setArts(arts.filter((art) => art.id !== id))}
+            />
+          ))}
+        </ul>
+        <form
+          className="mt-8"
+          onSubmit={(event) => {
+            event.preventDefault()
+            const data = new FormData(event.currentTarget as HTMLFormElement)
+            const artId = data.get('artId')
+
+            if (typeof artId !== 'string') {
+              return
+            }
+
+            if (Number.isNaN(+artId)) {
+              setFieldError('Art ID must be a number.')
+              return
+            }
+
+            event.currentTarget.reset()
+            setArts([...arts, { id: +artId }])
+          }}
+        >
+          <div className="w-80">
+            <label htmlFor="artId" className="block text-sm font-medium text-gray-700">
+              Art ID
+            </label>
+            <div className="mt-1 flex rounded-md shadow-sm">
+              <div className="relative flex flex-grow items-stretch focus-within:z-10">
+                <input
+                  type="number"
+                  name="artId"
+                  required
+                  id="artId"
+                  className="block w-full appearance-none rounded-none rounded-l-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  aria-describedby="artIdError"
+                  aria-invalid={fieldError ? 'true' : undefined}
+                />
+              </div>
+              <button
+                type="submit"
+                className="relative -ml-px inline-flex items-center space-x-2 rounded-r-md border border-gray-300 bg-gray-50 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              >
+                <PlusCircleIcon className="h-5 w-5" />
+                <span className="whitespace-nowrap">Add Art</span>
+              </button>
+            </div>
+            {fieldError && (
+              <p className="mt-2 text-sm text-red-600" id="artIdError">
+                {fieldError}
+              </p>
+            )}
+          </div>
+        </form>
+      </main>
+      <ToastViewport />
+    </ToastProvider>
   )
 }
 
-function App() {
-  const [arts, setArts] = useState<any>([])
-  
-  const a = [
-    { id: 27992, disabled: false },
-    { id: 27998, disabled: false },
-    { id: 27999, disabled: false },
-    { id: 27997, disabled: true },
-    { id: 27993, disabled: false },
-  ];
-
-  useEffect(() => {
-    const temp = []
-    for (let i = 0; i < a.length; i++) {
-      temp.push(<ArtItem id={a[i].id} disabled={a[i].disabled}></ArtItem>)
+type Fetcher<Data, Err> =
+  | {
+      state: 'idle'
+      data: undefined
     }
-    setArts(temp)
-  }, [setArts])
+  | {
+      state: 'loading'
+    }
+  | {
+      state: 'error'
+      error: Error | Err
+    }
+  | {
+      state: 'success'
+      data: Data
+    }
+
+type ArtRatingFetcher = Fetcher<string, string[] | string>
+
+type ArtFetcher = Fetcher<Artwork, { status: number; error: string; detail: string }>
+
+export const ArtItem = ({ id, onRemove }: { id: number; onRemove: (id: number) => void }) => {
+  const [rating, setRating] = React.useState<number | undefined>(undefined)
+  const [artFetcher, setArtFetcher] = React.useState<ArtFetcher>({ state: 'idle', data: undefined })
+  const [artRatingFetcher, setArtRatingFetcher] = React.useState<ArtRatingFetcher>({
+    state: 'idle',
+    data: undefined,
+  })
+
+  React.useEffect(() => {
+    setArtFetcher({ state: 'loading' })
+    getArtwork(id)
+      .then((response) => response.json())
+      .then((result: Artwork | { status: number; error: string; detail: string }) => {
+        if ('error' in result) {
+          setArtFetcher({ state: 'error', error: result })
+        } else {
+          setArtFetcher({ state: 'success', data: result })
+        }
+      })
+      .catch((reason) => setArtFetcher({ state: 'error', error: reason }))
+  }, [id])
+
+  if (artFetcher.state === 'loading' || artFetcher.state === 'idle') {
+    return (
+      <li className="rounded-lg bg-slate-200 p-4 shadow">
+        <p>Loading artwork...</p>
+      </li>
+    )
+  }
+
+  const removeButton = (
+    <button className="text-sm text-indigo-800" onClick={() => onRemove(id)}>
+      Remove Art
+    </button>
+  )
+
+  if (artFetcher.state === 'error') {
+    return (
+      <li className="rounded-lg bg-slate-200 p-4 shadow">
+        <details className="text-red-600">
+          <summary>An error occurred while loading Art ID: {id}</summary>
+          <p>
+            {artFetcher.error instanceof Error ? artFetcher.error.message : artFetcher.error.detail}
+          </p>
+        </details>
+        <div className="mt-4">{removeButton}</div>
+      </li>
+    )
+  }
+
+  const submit = () => {
+    setArtRatingFetcher({ state: 'loading' })
+    fetch('https://v0867.mocklab.io/rating', {
+      body: JSON.stringify({ id, rating }),
+      method: 'POST',
+    })
+      .then((response) => response.json())
+      .then((result: { message: string } | { errors: string[] }) => {
+        if ('message' in result) {
+          setArtRatingFetcher({ state: 'success', data: result.message })
+        } else if ('errors' in result) {
+          setArtRatingFetcher({ state: 'error', error: result.errors })
+        } else {
+          setArtRatingFetcher({
+            state: 'error',
+            error: new Error(`Unhandled error with data: ${result}`),
+          })
+        }
+      })
+      .catch((reason) => setArtRatingFetcher({ state: 'error', error: reason }))
+  }
 
   return (
-    <div className="App">
-      <h1>Art Rater</h1>
-      {arts}
-    </div>
-  );
+    <li className="rounded-lg bg-slate-100 p-4 shadow">
+      <h2 className="text-lg font-semibold">{artFetcher.data.data.title}</h2>
+      <h3 className="mt-1 text-sm text-gray-700">{artFetcher.data.data.artist_title}</h3>
+      <img
+        className="w-100 mt-6"
+        src={getImageUrl(artFetcher.data.data.image_id)}
+        alt={artFetcher.data.data.title}
+      />
+      <p className="mt-4">Rating: {rating}</p>
+      {artRatingFetcher.state !== 'success' && (
+        <div className="mt-4 flex">
+          <ToggleGroup.Root
+            type="single"
+            onValueChange={(value) => setRating(value === '' ? undefined : +value)}
+          >
+            {[1, 2, 3, 4, 5].map((number) => (
+              <ToggleGroup.Item
+                className="relative -ml-px inline-flex items-center border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 focus-visible:z-10 focus-visible:border-indigo-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-500 enabled:hover:bg-gray-50 disabled:opacity-60"
+                disabled={artRatingFetcher.state === 'loading'}
+                key={number}
+                value={`${number}`}
+              >
+                {number}
+              </ToggleGroup.Item>
+            ))}
+          </ToggleGroup.Root>
+          <button
+            className="relative -ml-px inline-flex items-center border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 focus-visible:z-10 focus-visible:border-indigo-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-500 enabled:hover:bg-gray-50 disabled:opacity-60"
+            disabled={rating === undefined || artRatingFetcher.state === 'loading'}
+            onClick={() => submit()}
+          >
+            {artRatingFetcher.state === 'loading' ? 'Submitting...' : 'Submit'}
+          </button>
+        </div>
+      )}
+      <div className="mt-4">{removeButton}</div>
+      {artRatingFetcher.state === 'success' ? (
+        <Toast type="success" description={artRatingFetcher.data} />
+      ) : artRatingFetcher.state === 'error' ? (
+        <Toast
+          type="error"
+          description={
+            Array.isArray(artRatingFetcher.error)
+              ? artRatingFetcher.error.join(' ')
+              : artRatingFetcher.error.toString()
+          }
+        />
+      ) : null}
+    </li>
+  )
 }
 
-export {App, ArtItem};
+const getArtwork = async (id: number) => {
+  return fetch('https://api.artic.edu/api/v1/artworks/' + id)
+}
+
+const getImageUrl = (id: string) => {
+  return 'https://www.artic.edu/iiif/2/' + id + '/full/843,/0/default.jpg'
+}
