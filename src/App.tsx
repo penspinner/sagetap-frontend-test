@@ -159,28 +159,6 @@ export const ArtItem = ({ id, onRemove }: { id: number; onRemove: (id: number) =
     )
   }
 
-  const submit = () => {
-    setArtRatingFetcher({ state: 'loading' })
-    fetch('https://v0867.mocklab.io/rating', {
-      body: JSON.stringify({ id, rating }),
-      method: 'POST',
-    })
-      .then((response) => response.json())
-      .then((result: { message: string } | { errors: string[] }) => {
-        if ('message' in result) {
-          setArtRatingFetcher({ state: 'success', data: result.message })
-        } else if ('errors' in result) {
-          setArtRatingFetcher({ state: 'error', error: result.errors })
-        } else {
-          setArtRatingFetcher({
-            state: 'error',
-            error: new Error(`Unhandled error with data: ${result}`),
-          })
-        }
-      })
-      .catch((reason) => setArtRatingFetcher({ state: 'error', error: reason }))
-  }
-
   return (
     <li className="rounded-lg bg-slate-100 p-4 shadow">
       <h2 className="text-lg font-semibold">{artFetcher.data.data.title}</h2>
@@ -192,7 +170,31 @@ export const ArtItem = ({ id, onRemove }: { id: number; onRemove: (id: number) =
       />
       <p className="mt-4">Rating: {rating}</p>
       {artRatingFetcher.state !== 'success' && (
-        <div className="mt-4 flex">
+        <form
+          className="mt-4 flex"
+          onSubmit={(event) => {
+            event.preventDefault()
+            setArtRatingFetcher({ state: 'loading' })
+            fetch('https://v0867.mocklab.io/rating', {
+              body: JSON.stringify({ id, rating }),
+              method: 'POST',
+            })
+              .then((response) => response.json())
+              .then((result: { message: string } | { errors: string[] }) => {
+                if ('message' in result) {
+                  setArtRatingFetcher({ state: 'success', data: result.message })
+                } else if ('errors' in result) {
+                  setArtRatingFetcher({ state: 'error', error: result.errors })
+                } else {
+                  setArtRatingFetcher({
+                    state: 'error',
+                    error: new Error(`Unhandled error with data: ${result}`),
+                  })
+                }
+              })
+              .catch((reason) => setArtRatingFetcher({ state: 'error', error: reason }))
+          }}
+        >
           <ToggleGroup.Root
             type="single"
             onValueChange={(value) => setRating(value === '' ? undefined : +value)}
@@ -211,11 +213,10 @@ export const ArtItem = ({ id, onRemove }: { id: number; onRemove: (id: number) =
           <button
             className="relative -ml-px inline-flex items-center border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 focus-visible:z-10 focus-visible:border-indigo-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-500 enabled:hover:bg-gray-50 disabled:opacity-60"
             disabled={rating === undefined || artRatingFetcher.state === 'loading'}
-            onClick={() => submit()}
           >
             {artRatingFetcher.state === 'loading' ? 'Submitting...' : 'Submit'}
           </button>
-        </div>
+        </form>
       )}
       <div className="mt-4">{removeButton}</div>
       {artRatingFetcher.state === 'success' ? (
